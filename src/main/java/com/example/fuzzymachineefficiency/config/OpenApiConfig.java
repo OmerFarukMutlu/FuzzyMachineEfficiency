@@ -1,0 +1,25 @@
+package com.example.fuzzymachineefficiency.config;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class OpenApiConfig {
+
+    @Bean
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("Makine Verimlilik Hesaplama API")
+                        .version("1.0")
+                        .description("Bulanık Mantık (Fuzzy Logic) kullanarak makine verimlilik analizi yapan servis dokümantasyonu.")
+                        .contact(new Contact()
+                                .name("Senin Adın")
+                                .email("mail@example.com")
+                                .url("https://github.com/senin-hesabin"))
+                );
+    }
+}
