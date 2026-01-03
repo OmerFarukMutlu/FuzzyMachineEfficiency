@@ -1,294 +1,76 @@
-// Fonksiyon Bloğu: Makine Verimlilik Hesaplama Motoru
 FUNCTION_BLOCK machine_efficiency
-
-// INPUTS
-// Bütün kriterlerimizin değerleri double değerler olacak ve onlar set edilecek
-
 VAR_INPUT
-       uretimMiktari : REAL;  // Birim: Adet (Örn: Günlük üretim adedi)
-       hataPayi : REAL;       // Birim: Yüzde % (0.0 ile 100.0 arası)
-       bakimAraligi : REAL;   // Birim: GÜN (Kaç günde bir bakım gerekiyor?)
-       beklemeSuresi : REAL;  // Birim: SAAT (Günlük toplam durma/bekleme saati)
-       enerjiTuketimi : REAL; // Birim: kWh (Saatlik veya günlük tüketim)
-   END_VAR
-
-// 2. ÇIKTI (OUTPUT)
-// Sistemin hesaplayacağı 0-100 arası skor.
-
-VAR_OUTPUT
-    verimlilikSkoru : REAL;
+    productionAmount : REAL;    
+    errorRate : REAL;           
+    maintenanceInterval : REAL; 
+    standbyTime : REAL;         
+    energyConsumption : REAL;   
 END_VAR
-FUZZIFY uretimMiktari
-    // 1. ÇOK DÜŞÜK: 0-600 arası (Makine neredeyse ölü)
-    // 0-300 arası kesinlikle çok düşük, 600'e gelince etkisi bitiyor.
-    TERM cok_dusuk  := (0, 1) (300, 1) (600, 0);
-
-    // 2. DÜŞÜK: 400-1200 arası (Verimsiz ama çalışıyor)
-    // 400'de hissetmeye başlıyoruz, 800 tam bu sınıfın merkezi.
-    TERM dusuk      := (400, 0) (800, 1) (1200, 0);
-
-    // 3. ORTA: 1000-2000 arası (Standart makine)
-    // Piyasada en çok bulunan ortalama makine tipi (1500 adet/gün).
-    TERM orta       := (1000, 0) (1500, 1) (2000, 0);
-
-    // 4. YÜKSEK: 1800-3000 arası (İyi performans)
-    // Ortalamanın belirgin şekilde üstü.
-    TERM yuksek     := (1800, 0) (2400, 1) (3000, 0);
-
-    // 5. ÇOK YÜKSEK: 2800 ve üzeri (Canavar)
-    // 3500 ve üstü artık zirvedir, daha iyisi şamda kayısı.
-    TERM cok_yuksek := (2800, 0) (3500, 1) (5000, 1);
+VAR_OUTPUT
+    efficiencyScore : REAL;     
+END_VAR
+FUZZIFY productionAmount
+    TERM very_low  := (0, 1) (400, 1) (800, 0);
+    TERM low       := (600, 0) (1000, 1) (1400, 0);
+    TERM medium    := (1200, 0) (2000, 1) (2800, 0);
+    TERM high      := (2500, 0) (3500, 1) (4200, 0);
+    TERM very_high := (4000, 0) (4500, 1) (5000, 1);
 END_FUZZIFY
-//---------------------------------------------------------------
-HATA PAYI % (Ne kadar azsa o kadar iyi)
-FUZZIFY hataPayi
-    // 1. ÇOK AZ: %0 - %2 arası (Mükemmel Kalite)
-    // 0 ile 1 arası tam puan, 2'ye gelince etkisi bitiyor.
-    TERM cok_az    := (0, 1) (1, 1) (2, 0);
-
-    // 2. AZ: %1.5 - %4 arası (Kabul Edilebilir Standart)
-    // %2.5 - %3 civarı bu sınıfın merkezidir.
-    TERM az        := (1.5, 0) (3, 1) (4, 0);
-
-    // 3. MAKUL: %3.5 - %6.5 arası (Sınırda)
-    // %5 civarı kritik eşiktir, ne iyi ne kötü.
-    TERM makul     := (3.5, 0) (5, 1) (6.5, 0);
-
-    // 4. ÇOK: %6 - %9 arası (Sorunlu)
-    // Artık üretimde ciddi fireler var demektir.
-    TERM cok       := (6, 0) (7.5, 1) (9, 0);
-
-    // 5. ÇOK FAZLA: %8 ve üzeri (Felaket / Hurda)
-    // %10 ve üstü zaten makineyi kapatıp eve gitme sebebidir.
-    TERM cok_fazla := (8, 0) (10, 1) (100, 1);
+FUZZIFY errorRate
+    TERM very_low  := (0, 1) (1, 1) (2, 0);
+    TERM low       := (1.5, 0) (3, 1) (4.5, 0);
+    TERM moderate  := (4, 0) (6, 1) (8, 0);
+    TERM high      := (7, 0) (10, 1) (15, 0);
+    TERM very_high := (12, 0) (20, 1) (100, 1); 
 END_FUZZIFY
-//-------------------------------------------------------------
-// FUZZIFY(Bulanıklaştırma)
-//-------------------------------------------------------------
-
-BAKIM ARALIĞI - GÜN (Ne kadar uzunsa o kadar iyi)
-FUZZIFY bakimAraligi
-    // 1. ÇOK KISA: 0-15 gün (Sürekli Arıza / Çürük)
-    // 7 güne kadar olanlar kesinlikle "Çok Kısa"dır.
-    TERM cok_kisa := (0, 1) (7, 1) (15, 0);
-
-    // 2. KISA: 10-40 gün (Hassas Makine)
-    // Ayda bir bakım istiyor (25 gün civarı).
-    TERM kisa     := (10, 0) (25, 1) (40, 0);
-
-    // 3. NORMAL: 30-70 gün (Standart Endüstriyel)
-    // 1.5 - 2 ayda bir bakım (50 gün civarı).
-    TERM normal   := (30, 0) (50, 1) (70, 0);
-
-    // 4. UZUN: 60-140 gün (Sağlam)
-    // 3-4 ay sorunsuz gidiyor (100 gün civarı).
-    TERM uzun     := (60, 0) (100, 1) (1400, 0);
-
-    // 5. ÇOK UZUN: 120 gün ve üzeri (Taş Gibi / Evladiyelik)
-    // 6 ay (180 gün) ve üstü artık zirvedir.
-    TERM cok_uzun := (120, 0) (180, 1) (365, 1);
+FUZZIFY maintenanceInterval
+    TERM very_short := (0, 1) (5, 1) (10, 0);
+    TERM short      := (7, 0) (15, 1) (25, 0);
+    TERM normal     := (20, 0) (45, 1) (60, 0);
+    TERM long       := (50, 0) (90, 1) (120, 0);
+    TERM very_long  := (100, 0) (180, 1) (365, 1);
 END_FUZZIFY
-//---------------------------------------------------------------
-EKLEME SÜRESİ - SAAT (Ne kadar azsa o kadar iyi)
-FUZZIFY beklemeSuresi
-    // 1. ÇOK DÜŞÜK: 0 - 1.5 saat (Neredeyse hiç durmuyor)
-    // 0-45 dk arası mola tam puan, 1.5 saate gelince etkisi biter.
-    TERM cok_dusuk  := (0, 1) (0.75, 1) (1.5, 0);
-
-    // 2. DÜŞÜK: 1 - 3 saat (Makul molalar)
-    // Günde toplam 2 saat bekleme bu seviyenin merkezidir.
-    TERM dusuk      := (1, 0) (2, 1) (3, 0);
-
-    // 3. ORTA: 2.5 - 5 saat (Standart duruşlar)
-    // Vardiya değişimleri, yemek vb. dahil 4 saat normal kabul edilebilir.
-    TERM orta       := (2.5, 0) (4, 1) (5.5, 0);
-
-    // 4. YÜKSEK: 4.5 - 8 saat (Verim kaybı başlıyor)
-    // Günde 6-7 saat boş duran makine alarm veriyordur.
-    TERM yuksek     := (4.5, 0) (6.5, 1) (8.5, 0);
-
-    // 5. ÇOK YÜKSEK: 8 saat ve üzeri (Yatışta)
-    // Mesainin 3'te 1'ini yatara geçiriyorsa o makine zarardır.
-    TERM cok_yuksek := (8, 0) (10, 1) (24, 1);
+FUZZIFY standbyTime
+    TERM very_low  := (0, 1) (15, 1) (30, 0);    
+    TERM low       := (20, 0) (45, 1) (70, 0);   
+    TERM medium    := (60, 0) (90, 1) (120, 0);  
+    TERM high      := (100, 0) (180, 1) (240, 0);
+    TERM very_high := (200, 0) (300, 1) (1440, 1); 
 END_FUZZIFY
-//---------------------------------------------------------
-// ¬ENERJİ TÜKETİMİ - kWh (Ne kadar azsa o kadar iyi)
-FUZZIFY enerjiTuketimi
-    // 1. ÇOK EKONOMİK: 0-40 kWh (Bedavadan biraz pahalı)
-    // 30'a kadar mükemmel, 45'te etkisi bitiyor.
-    TERM cok_ekonomik := (0, 1) (30, 1) (45, 0);
-
-    // 2. EKONOMİK: 35-75 kWh (Tasarruflu)
-    // 55 kWh civarı bu sınıfın merkezidir.
-    TERM ekonomik     := (35, 0) (55, 1) (75, 0);
-
-    // 3. NORMAL: 65-105 kWh (Standart Tüketim)
-    // Endüstri ortalaması 85 kWh kabul edildi.
-    TERM normal       := (65, 0) (85, 1) (105, 0);
-
-    // 4. SAVURGAN: 95-135 kWh (Masraflı)
-    // 115 kWh civarı artık fatura can yakmaya başlar.
-    TERM savurgan     := (95, 0) (115, 1) (135, 0);
-
-    // 5. ÇOK SAVURGAN: 125 kWh ve üzeri (Enerji Canavarı)
-    // 150 kWh ve üstü direkt kârı eriten seviyedir.
-    TERM cok_savurgan := (125, 0) (150, 1) (1000, 1);
+FUZZIFY energyConsumption
+    TERM very_economic := (0, 1) (20, 1) (40, 0);
+    TERM economic      := (30, 0) (50, 1) (70, 0);
+    TERM normal        := (60, 0) (80, 1) (100, 0);
+    TERM wasteful      := (90, 0) (110, 1) (130, 0);
+    TERM very_wasteful := (120, 0) (140, 1) (1000, 1);
 END_FUZZIFY
-
-//  BERRAKLAŞTIRMA (DEFUZZIFY) - Sonuç Hesaplama
-DEFUZZIFY verimlilikSkoru
-    // 1. ÇOK KÖTÜ: 0-30 Puan (Kritik Bölge)
-    // 0-20 arası kesin çok kötü, 30'da etkisi bitiyor.
-    TERM cok_kotu := (0, 1) (20, 1) (30, 0);
-
-    // 2. KÖTÜ: 20-50 Puan (Verimsiz Bölge)
-    // 20'de başlıyor, 35 tam merkezi, 50'de bitiyor.
-    // Dikkat: cok_kotu ile 20-30 arasında, orta ile 40-50 arasında kesişir.
-    TERM kotu     := (20, 0) (35, 1) (50, 0);
-
-    // 3. ORTA: 40-70 Puan (Standart Bölge)
-    // 55 puan tam ortalama kabul edildi.
-    TERM orta     := (40, 0) (55, 1) (70, 0);
-
-    // 4. İYİ: 60-90 Puan (Verimli Bölge)
-    // 75 puan "İyi"nin merkezidir.
-    TERM iyi      := (60, 0) (75, 1) (90, 0);
-
-    // 5. ÇOK İYİ: 80-100 Puan (Yüksek Performans)
-    // 80'de hissetmeye başlarız, 90 ve üzeri kesinlikle çok iyidir.
-    TERM cok_iyi  := (80, 0) (95, 1) (100, 1);
-
-    METHOD : COG; // Center of Gravity (Ağırlık Merkezi)
-    DEFAULT := 0; // Hiçbir kural çalışmazsa 0 dön.
+DEFUZZIFY efficiencyScore
+    TERM very_bad  := (0, 1) (15, 1) (30, 0);
+    TERM bad       := (20, 0) (40, 1) (55, 0);
+    TERM medium    := (45, 0) (60, 1) (75, 0);
+    TERM good      := (65, 0) (80, 1) (90, 0);
+    TERM very_good := (85, 0) (95, 1) (100, 1);
+    METHOD : COG;  
+    DEFAULT := 50; 
 END_DEFUZZIFY
-// -----------------------------------------------------------------------------
-//  KURAL BLOĞU (RULEBLOCK) - Karar Mekanizması
-// -----------------------------------------------------------------------------
-RULEBLOCK Kurallar
-    // Temel Bulanık Mantık Operatörleri
-    AND : MIN;  // "VE" işlemi: Şartlardan en kötüsünü (minimumunu) baz al.
-    ACT : MIN;  // Aktivasyon: Sonucu kesme yöntemi.
-    ACCU : MAX; // Birikim: Birden fazla kural çalışırsa en iyi sonucu (MAX) birleştir.
-
-    // ============================================================
-    // GRUP 1: KIRMIZI ALARMLAR (Affedilmeyen Hatalar)
-    // Bu kurallar, makine diğer konularda iyi olsa bile verimi dibe çeker.
-    // ============================================================
-
-    // Hata "Çok Fazla" ise (%8+), makine ne kadar hızlı olursa olsun çöp üretir. -> ÇOK KÖTÜ
-    RULE 1 : IF hataPayi IS cok_fazla THEN verimlilikSkoru IS cok_kotu;
-
-    // Makine sürekli "Yatıyorsa" (Bekleme: Çok Yüksek), işletmeye zarardır. -> ÇOK KÖTÜ
-    RULE 2 : IF beklemeSuresi IS cok_yuksek THEN verimlilikSkoru IS cok_kotu;
-
-    // Bakım aralığı "Çok Kısa" ise (sürekli bozuluyor), verim yerlerdedir. -> ÇOK KÖTÜ
-    RULE 3 : IF bakimAraligi IS cok_kisa THEN verimlilikSkoru IS cok_kotu;
-
-    // Üretim "Çok Düşük" ise makinenin çalışmasının bir anlamı yoktur. -> ÇOK KÖTÜ
-    RULE 4 : IF uretimMiktari IS cok_dusuk THEN verimlilikSkoru IS cok_kotu;
-
-
-    // ============================================================
-    // GRUP 2: KÖTÜ VE YETERSİZ SENARYOLAR
-    // Makine çalışıyor ama verimsiz.
-    // ============================================================
-
-    // Üretim "Düşük" ve Enerji "Savurgan" (Az iş yapıyor, çok yakıyor). -> KÖTÜ
-    RULE 5 : IF uretimMiktari IS dusuk AND enerjiTuketimi IS savurgan THEN verimlilikSkoru IS kotu;
-
-    // Hata "Çok" ise (%7 civarı), üretim "Orta" olsa bile kurtarmaz. -> KÖTÜ
-    RULE 6 : IF hataPayi IS cok AND uretimMiktari IS orta THEN verimlilikSkoru IS kotu;
-
-    // Bekleme "Yüksek" ve Üretim "Yüksek Değil" (Düşük). -> KÖTÜ
-    RULE 7 : IF beklemeSuresi IS yuksek AND uretimMiktari IS dusuk THEN verimlilikSkoru IS kotu;
-
-
-    // ============================================================
-    // GRUP 3: ORTA (İDARE EDER / DENGELİ) SENARYOLAR
-    // Ne kâr ne zarar durumları veya "Biri iyi, biri kötü" durumları.
-    // ============================================================
-
-    // Standart Senaryo: Her şey ortalama. -> ORTA
-    RULE 8 : IF uretimMiktari IS orta AND hataPayi IS makul AND enerjiTuketimi IS normal THEN verimlilikSkoru IS orta;
-
-    // Hız vs Hata Dengesi: Üretim "Çok Yüksek" ama Hata "Makul".
-    // (Hızlı gittiği için biraz fire veriyor, kabul edilebilir). -> ORTA
-    RULE 9 : IF uretimMiktari IS cok_yuksek AND hataPayi IS makul THEN verimlilikSkoru IS orta;
-
-    // Hız vs Enerji Dengesi: Üretim "Çok Yüksek" ama Enerji "Çok Savurgan".
-    // (Çok üretiyor ama elektriği içiyor). -> ORTA
-    RULE 10 : IF uretimMiktari IS cok_yuksek AND enerjiTuketimi IS cok_savurgan THEN verimlilikSkoru IS orta;
-
-    // Güvenli Liman: Üretim "Düşük" ama Hata "Çok Az" ve Masrafsız (Ekon.). -> ORTA
-    // (Yavaş ama temiz ve ucuz iş yapıyor).
-    RULE 11 : IF uretimMiktari IS dusuk AND hataPayi IS cok_az AND enerjiTuketimi IS cok_ekonomik THEN verimlilikSkoru IS orta;
-
-
-    // ============================================================
-    // GRUP 4: İYİ (VERİMLİ) SENARYOLAR
-    // İşletmenin yüzünü güldüren makineler.
-    // ============================================================
-
-    // Klasik İyi Makine: Üretim Yüksek, Enerji Ekonomik. -> İYİ
-    RULE 12 : IF uretimMiktari IS yuksek AND enerjiTuketimi IS ekonomik THEN verimlilikSkoru IS iyi;
-
-    // Sağlam Makine: Bakım "Uzun" (sağlam) ve Hata "Az". -> İYİ
-    RULE 13 : IF bakimAraligi IS uzun AND hataPayi IS az THEN verimlilikSkoru IS iyi;
-
-    // Çalışkan Makine: Bekleme "Çok Düşük" (arı gibi) ve Hata "Makul". -> İYİ
-    RULE 14 : IF beklemeSuresi IS cok_dusuk AND hataPayi IS makul THEN verimlilikSkoru IS iyi;
-
-    // Tasarruf Canavarı: Enerji "Çok Ekonomik" ve Üretim "Orta". -> İYİ
-    // (Çok hızlı değil ama bedavaya çalışıyor).
-    RULE 15 : IF enerjiTuketimi IS cok_ekonomik AND uretimMiktari IS orta THEN verimlilikSkoru IS iyi;
-
-
-    // ============================================================
-    // GRUP 5: ÇOK İYİ (EFSANE / YILDIZ) SENARYOLAR
-    // Nadir bulunan mükemmel kombinasyonlar.
-    // ============================================================
-
-    // Rüya Makine 1: Üretim Çok Yüksek + Hata Çok Az. -> ÇOK İYİ
-    RULE 16 : IF uretimMiktari IS cok_yuksek AND hataPayi IS cok_az THEN verimlilikSkoru IS cok_iyi;
-
-    // Rüya Makine 2: Üretim Çok Yüksek + Enerji Çok Ekonomik. -> ÇOK İYİ
-    RULE 17 : IF uretimMiktari IS cok_yuksek AND enerjiTuketimi IS cok_ekonomik THEN verimlilikSkoru IS cok_iyi;
-
-    // Rüya Makine 3: Bakım "Çok Uzun" (hiç bozulmuyor) + Üretim "Yüksek". -> ÇOK İYİ
-    RULE 18 : IF bakimAraligi IS cok_uzun AND uretimMiktari IS yuksek THEN verimlilikSkoru IS cok_iyi;
-
-    // FULL PAKET: Üretim Yüksek + Hata Az + Bekleme Düşük + Enerji Ekonomik. -> ÇOK İYİ
-    RULE 19 : IF uretimMiktari IS yuksek AND hataPayi IS az AND beklemeSuresi IS dusuk AND enerjiTuketimi IS ekonomik THEN verimlilikSkoru IS cok_iyi;
-
-
-// ============================================================
-    // EK: ARA DURUMLAR VE DENGELEYİCİLER (SİGORTA KURALLARI)
-    // ============================================================
-
-    // 1. "Eh İşte" Durumu:
-    // Üretim Düşük olsa bile, masrafsız (Ekon.) ve bakımsız (Uzun) ise "Kötü" değil "Orta" verelim.
-    // (Yavaş ama baş ağrıtmayan makine).
-    RULE 20 : IF uretimMiktari IS dusuk AND enerjiTuketimi IS ekonomik AND bakimAraligi IS uzun THEN verimlilikSkoru IS orta;
-
-    // 2. Bakım Problemi Toleransı:
-    // Bakım sık (Kısa) ama Üretim "Yüksek" ve Hata "Az".
-    // (Sık bozuluyor ama çalıştığında çok iyi iş çıkarıyor -> İyi).
-    RULE 21 : IF bakimAraligi IS kisa AND uretimMiktari IS yuksek AND hataPayi IS az THEN verimlilikSkoru IS iyi;
-
-    // 3. Bekleme Cezası Dengesi:
-    // Makine çok bekliyor (Yüksek) ama kalan zamanda "Çok Yüksek" üretim yapıyor.
-    // (Vardiya planlaması hatası olabilir, makine suçu yok -> Orta).
-    RULE 22 : IF beklemeSuresi IS yuksek AND uretimMiktari IS cok_yuksek THEN verimlilikSkoru IS orta;
-
-    // 4. Enerji Cezası Hafifletme:
-    // Enerji "Savurgan" ama Hata "Çok Az" ve Bakım "Çok Uzun".
-    // (Çok yakıyor ama çok kaliteli ve sağlam -> İyi).
-    RULE 23 : IF enerjiTuketimi IS savurgan AND hataPayi IS cok_az AND bakimAraligi IS cok_uzun THEN verimlilikSkoru IS iyi;
-
-    // 5. Genel Vasatlık (Her şey kötünün iyisiyse):
-    // Üretim Düşük, Hata Makul, Enerji Normal. -> Kötü (Orta değil).
-    // (Hiçbir albenisi yok).
-    RULE 24 : IF uretimMiktari IS dusuk AND hataPayi IS makul AND enerjiTuketimi IS normal THEN verimlilikSkoru IS kotu;
+RULEBLOCK Rules
+    AND : MIN;
+    ACT : MIN;
+    ACCU : MAX;
+    RULE 1 : IF errorRate IS very_high THEN efficiencyScore IS very_bad;
+    RULE 2 : IF productionAmount IS very_low AND standbyTime IS very_high THEN efficiencyScore IS very_bad;
+    RULE 3 : IF maintenanceInterval IS very_short THEN efficiencyScore IS bad;
+    RULE 4 : IF energyConsumption IS very_wasteful THEN efficiencyScore IS bad;
+    RULE 5 : IF productionAmount IS medium AND errorRate IS moderate THEN efficiencyScore IS medium;
+    RULE 6 : IF standbyTime IS medium THEN efficiencyScore IS medium;
+    RULE 7 : IF productionAmount IS high AND errorRate IS high THEN efficiencyScore IS medium;
+    RULE 8 : IF productionAmount IS high AND errorRate IS low THEN efficiencyScore IS good;
+    RULE 9 : IF maintenanceInterval IS long AND standbyTime IS low THEN efficiencyScore IS good;
+    RULE 10 : IF energyConsumption IS economic AND productionAmount IS medium THEN efficiencyScore IS good;
+    RULE 11 : IF productionAmount IS very_high AND errorRate IS very_low THEN efficiencyScore IS very_good;
+    RULE 12 : IF standbyTime IS very_low AND energyConsumption IS very_economic THEN efficiencyScore IS very_good;
+    RULE 13 : IF productionAmount IS high AND errorRate IS low AND maintenanceInterval IS long THEN efficiencyScore IS very_good;
+    RULE 14 : IF productionAmount IS low AND errorRate IS very_low THEN efficiencyScore IS medium;
+    RULE 15 : IF energyConsumption IS wasteful AND productionAmount IS very_high THEN efficiencyScore IS good;
 END_RULEBLOCK
-
 END_FUNCTION_BLOCK
