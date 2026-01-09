@@ -1,0 +1,76 @@
+FUNCTION_BLOCK machine_efficiency
+VAR_INPUT
+    productionAmount : REAL;    
+    errorRate : REAL;           
+    maintenanceInterval : REAL; 
+    standbyTime : REAL;         
+    energyConsumption : REAL;   
+END_VAR
+VAR_OUTPUT
+    efficiencyScore : REAL;     
+END_VAR
+FUZZIFY productionAmount
+    TERM very_low  := (0, 1) (400, 1) (800, 0);
+    TERM low       := (600, 0) (1000, 1) (1400, 0);
+    TERM medium    := (1200, 0) (2000, 1) (2800, 0);
+    TERM high      := (2500, 0) (3500, 1) (4200, 0);
+    TERM very_high := (4000, 0) (4500, 1) (5000, 1);
+END_FUZZIFY
+FUZZIFY errorRate
+    TERM very_low  := (0, 1) (1, 1) (2, 0);
+    TERM low       := (1.5, 0) (3, 1) (4.5, 0);
+    TERM moderate  := (4, 0) (6, 1) (8, 0);
+    TERM high      := (7, 0) (10, 1) (15, 0);
+    TERM very_high := (12, 0) (20, 1) (100, 1); 
+END_FUZZIFY
+FUZZIFY maintenanceInterval
+    TERM very_short := (0, 1) (5, 1) (10, 0);
+    TERM short      := (7, 0) (15, 1) (25, 0);
+    TERM normal     := (20, 0) (45, 1) (60, 0);
+    TERM long       := (50, 0) (90, 1) (120, 0);
+    TERM very_long  := (100, 0) (180, 1) (365, 1);
+END_FUZZIFY
+FUZZIFY standbyTime
+    TERM very_low  := (0, 1) (15, 1) (30, 0);    
+    TERM low       := (20, 0) (45, 1) (70, 0);   
+    TERM medium    := (60, 0) (90, 1) (120, 0);  
+    TERM high      := (100, 0) (180, 1) (240, 0);
+    TERM very_high := (200, 0) (300, 1) (1440, 1); 
+END_FUZZIFY
+FUZZIFY energyConsumption
+    TERM very_economic := (0, 1) (20, 1) (40, 0);
+    TERM economic      := (30, 0) (50, 1) (70, 0);
+    TERM normal        := (60, 0) (80, 1) (100, 0);
+    TERM wasteful      := (90, 0) (110, 1) (130, 0);
+    TERM very_wasteful := (120, 0) (140, 1) (1000, 1);
+END_FUZZIFY
+DEFUZZIFY efficiencyScore
+    TERM very_bad  := (0, 1) (15, 1) (30, 0);
+    TERM bad       := (20, 0) (40, 1) (55, 0);
+    TERM medium    := (45, 0) (60, 1) (75, 0);
+    TERM good      := (65, 0) (80, 1) (90, 0);
+    TERM very_good := (85, 0) (95, 1) (100, 1);
+    METHOD : COG;  
+    DEFAULT := 50; 
+END_DEFUZZIFY
+RULEBLOCK Rules
+    AND : MIN;
+    ACT : MIN;
+    ACCU : MAX;
+    RULE 1 : IF errorRate IS very_high THEN efficiencyScore IS very_bad;
+    RULE 2 : IF productionAmount IS very_low AND standbyTime IS very_high THEN efficiencyScore IS very_bad;
+    RULE 3 : IF maintenanceInterval IS very_short THEN efficiencyScore IS bad;
+    RULE 4 : IF energyConsumption IS very_wasteful THEN efficiencyScore IS bad;
+    RULE 5 : IF productionAmount IS medium AND errorRate IS moderate THEN efficiencyScore IS medium;
+    RULE 6 : IF standbyTime IS medium THEN efficiencyScore IS medium;
+    RULE 7 : IF productionAmount IS high AND errorRate IS high THEN efficiencyScore IS medium;
+    RULE 8 : IF productionAmount IS high AND errorRate IS low THEN efficiencyScore IS good;
+    RULE 9 : IF maintenanceInterval IS long AND standbyTime IS low THEN efficiencyScore IS good;
+    RULE 10 : IF energyConsumption IS economic AND productionAmount IS medium THEN efficiencyScore IS good;
+    RULE 11 : IF productionAmount IS very_high AND errorRate IS very_low THEN efficiencyScore IS very_good;
+    RULE 12 : IF standbyTime IS very_low AND energyConsumption IS very_economic THEN efficiencyScore IS very_good;
+    RULE 13 : IF productionAmount IS high AND errorRate IS low AND maintenanceInterval IS long THEN efficiencyScore IS very_good;
+    RULE 14 : IF productionAmount IS low AND errorRate IS very_low THEN efficiencyScore IS medium;
+    RULE 15 : IF energyConsumption IS wasteful AND productionAmount IS very_high THEN efficiencyScore IS good;
+END_RULEBLOCK
+END_FUNCTION_BLOCK
